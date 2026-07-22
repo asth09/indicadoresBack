@@ -38,31 +38,39 @@ export const register = async (req, res) => {
 };
 
 export const login = async (req, res) => {
+    // 1. Conexión a Base de Datos
     try {
-        // 2. ASEGURAR CONEXIÓN A MONGO ANTES DE BUSCAR AL USUARIO
         await connectDB();
+    } catch (dbError) {
+        console.error("Fallo conexión MongoDB:", dbError);
+        return res.status(500).json({ message: "Error conectando a la base de datos", error: dbError.message });
+    }
 
-        const { usuario, password } = req.body;
+    const { usuario, password } = req.body;
 
-        // 3. Buscar si el usuario existe
+    try {
+        // 2. Busqueda de usuario
         const userFound = await User.findOne({ usuario });
         if (!userFound) {
             return res.status(400).json({ message: "Usuario o contraseña incorrecta" });
         }
 
-        // 4. Verificar la contraseña
+        // 3. Comparación de contraseña
         const isMatch = await bcrypt.compare(password, userFound.password);
         if (!isMatch) {
             return res.status(400).json({ message: "Usuario o contraseña incorrecta" });
         }
 
-        // 5. Crear el Token JWT
-        const token = await createAccessToken({ 
-            id: userFound._id, 
-            role: userFound.role 
-        });
+        // 4. Generación de Token JWT
+        let token;
+        try {
+            token = await createAccessToken({ id: userFound._id, role: userFound.role });
+        } catch (jwtErr) {
+            console.error("Error al crear JWT token:", jwtErr);
+            return res.status(500).json({ message: "Error al generar el token de sesión", error: jwtErr.message });
+        }
 
-        // 6. Auditoría (En un try/catch aislado para no tumbar el login si falla)
+        // 5. Auditoría (Opcional - Silenciosa)
         try {
             const loginLog = new Audit({
                 usuarioId: userFound._id,
@@ -71,13 +79,13 @@ export const login = async (req, res) => {
             });
             await loginLog.save();
         } catch (auditError) {
-            console.error("Error al registrar auditoría:", auditError.message);
+            console.error("Error al guardar auditoría (login ignorará este error):", auditError.message);
         }
 
-        // 7. Enviar cookie y respuesta exitosa
+        // 6. Asignación de Cookie y Respuesta
         res.cookie('token', token, {
             ...cookieOptions,
-            maxAge: 24 * 60 * 60 * 1000 // 1 día
+            maxAge: 24 * 60 * 60 * 1000
         });
 
         return res.json({
@@ -88,11 +96,8 @@ export const login = async (req, res) => {
         });
 
     } catch (error) {
-        console.error("Error detallado en login:", error);
-        return res.status(500).json({ 
-            message: "Error interno del servidor", 
-            error: error.message 
-        });
+        console.error("Error no esperado en login:", error);
+        return res.status(500).json({ message: "Error interno del servidor", error: error.message });
     }
 };
 
