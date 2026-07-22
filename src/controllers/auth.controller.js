@@ -4,6 +4,15 @@ import bcrypt from 'bcryptjs'
 import { createAccessToken } from '../libs/jwt.js'
 import jwt from 'jsonwebtoken';
 import { JWT_SECRET } from '../config.js';
+import { connectDB } from '../db.js';
+
+const isProduction = process.env.NODE_ENV === 'production' || process.env.VERCEL;
+
+const cookieOptions = {
+    httpOnly: true,
+    sameSite: isProduction ? 'none' : 'lax',
+    secure: isProduction ? true : false,
+};
 
 export const register = async (req, res) => {
     const {usuario, password, role} = req.body
@@ -29,45 +38,45 @@ export const register = async (req, res) => {
 };
 
 export const login = async (req, res) => {
-    const { usuario, password } = req.body;
-
     try {
-        // 1. Verificar si el usuario existe y NO está marcado como eliminado
+        // 2. ASEGURAR CONEXIÓN A MONGO ANTES DE BUSCAR AL USUARIO
+        await connectDB();
+
+        const { usuario, password } = req.body;
+
+        // 3. Buscar si el usuario existe
         const userFound = await User.findOne({ usuario });
-        
         if (!userFound) {
             return res.status(400).json({ message: "Usuario o contraseña incorrecta" });
         }
 
-        // 2. Comparar la contraseña
+        // 4. Verificar la contraseña
         const isMatch = await bcrypt.compare(password, userFound.password);
         if (!isMatch) {
             return res.status(400).json({ message: "Usuario o contraseña incorrecta" });
         }
 
-        // 3. Generar el Token de acceso
+        // 5. Crear el Token JWT
         const token = await createAccessToken({ 
             id: userFound._id, 
             role: userFound.role 
         });
 
-        const isProduction = process.env.NODE_ENV === 'production' || process.env.VERCEL;
+        // 6. Auditoría (En un try/catch aislado para no tumbar el login si falla)
+        try {
+            const loginLog = new Audit({
+                usuarioId: userFound._id,
+                accion: 'LOGIN',
+                detalles: `El usuario ${userFound.usuario} ha iniciado sesión en el sistema.`
+            });
+            await loginLog.save();
+        } catch (auditError) {
+            console.error("Error al registrar auditoría:", auditError.message);
+        }
 
-        // 4. REGISTRO EN AUDITORÍA (Inicio de sesión)
-        // Guardamos quién entró y en qué fecha/hora
-        const loginLog = new Audit({
-            usuarioId: userFound._id,
-            accion: 'LOGIN',
-            detalles: `El usuario ${userFound.usuario} ha iniciado sesión en el sistema.`
-        });
-        await loginLog.save();
-
-        // 5. Configurar cookie y enviar respuesta
+        // 7. Enviar cookie y respuesta exitosa
         res.cookie('token', token, {
-            // Configuración recomendada para desarrollo local
-            sameSite: isProduction ? 'none' : 'lax',
-            secure: isProduction ? true : false, 
-            httpOnly: true,
+            ...cookieOptions,
             maxAge: 24 * 60 * 60 * 1000 // 1 día
         });
 
@@ -79,8 +88,11 @@ export const login = async (req, res) => {
         });
 
     } catch (error) {
-        console.error("Error en el login:", error);
-        return res.status(500).json({ message: "Error interno del servidor" });
+        console.error("Error detallado en login:", error);
+        return res.status(500).json({ 
+            message: "Error interno del servidor", 
+            error: error.message 
+        });
     }
 };
 
