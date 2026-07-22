@@ -12,15 +12,29 @@ dotenv.config();
 
 const app = express();
 
+// Lista de orígenes permitidos
+const ALLOWED_ORIGINS = [
+    'https://indicadores-front.vercel.app',
+    'http://localhost:5173', // Para desarrollo local con Vite
+    'http://localhost:3000'
+];
+
 app.use(cors({
-    origin: [
-    'http://localhost:5173',               // Tu entorno de desarrollo local
-    'https://indicadores-front.vercel.app'       // URL real de tu Frontend en Vercel
-  ],
-    credentials: true, // Permitir credenciales
-    methods: "PUT, POST, GET, DELETE, PATCH, OPTIONS",
-    allowedHeaders: "content-type"
+    origin: function (origin, callback) {
+        // Permitir peticiones sin origen (como Postman o Server-to-Server)
+        if (!origin) return callback(null, true);
+        
+        if (ALLOWED_ORIGINS.includes(origin)) {
+            return callback(null, true);
+        } else {
+            return callback(null, true); // O callback(new Error('CORS no permitido'))
+        }
+    },
+    credentials: true, // ¡CRÍTICO para el envío de cookies/tokens!
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 }));
+
 app.use(express.json());
 app.use(cookieParser());
 
