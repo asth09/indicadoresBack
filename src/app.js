@@ -19,7 +19,7 @@ const app = express();
 app.use(cors({
     origin: [
     'http://localhost:5173',               // Tu entorno de desarrollo local
-    'https://tu-frontend.vercel.app'       // URL real de tu Frontend en Vercel
+    'https://indicadores-front.vercel.app/'       // URL real de tu Frontend en Vercel
   ],
     credentials: true, // Permitir credenciales
     methods: "PUT, POST, GET, DELETE, PATCH, OPTIONS",
