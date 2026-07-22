@@ -63,9 +63,10 @@ export const login = async (req, res) => {
         // 5. Configurar cookie y enviar respuesta
         res.cookie('token', token, {
             // Configuración recomendada para desarrollo local
-            sameSite: 'none',
+            sameSite: 'lax',
             secure: true, 
-            httpOnly: false
+            httpOnly: true,
+            maxAge: 24 * 60 * 60 * 1000 // 1 día
         });
 
         return res.json({
