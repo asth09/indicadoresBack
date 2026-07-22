@@ -51,6 +51,8 @@ export const login = async (req, res) => {
             role: userFound.role 
         });
 
+        const isProduction = process.env.NODE_ENV === 'production' || process.env.VERCEL;
+
         // 4. REGISTRO EN AUDITORÍA (Inicio de sesión)
         // Guardamos quién entró y en qué fecha/hora
         const loginLog = new Audit({
