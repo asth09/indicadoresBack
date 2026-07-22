@@ -110,7 +110,7 @@ export const logout = (req, res) => {
 
 export const verifyToken = (req, res) => {
     const {token} = req.cookies
-    await connectDB();
+    
 
     if (!token) return res.status(401).json({ message: "unauthorized"});
 
